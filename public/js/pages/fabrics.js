@@ -1,0 +1,2 @@
+R['fabrics'] = () => page('Fabrics', 'Fabric details will be added once verified. Texture photos go in the slots.',
+`<div class="grid">${FABRICS.map(f => `<div class="card">${ph(f + ' — texture photo','1/1')}<h3><a href="/fabrics/${f.toLowerCase().replace(/[^a-z0-9]+/g,'-')}">${f}</a></h3><p>Add what you can verify: look, feel, best uses.</p>${cta(`Hi OFFside, I’m interested in the ${f} fabric.`, 'Ask about this', 'btn ghost')}</div>`).join('')}</div>`);

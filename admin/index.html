@@ -1,0 +1,92 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>OFFside admin</title>
+<link rel="stylesheet" href="/tokens.css">
+<style>
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-bottom:20px}
+.tabs{display:flex;gap:8px}.tabs .btn{padding:.5em 1em}.item{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--line)}
+.item img{width:48px;height:48px;object-fit:cover}.item .l{display:flex;gap:12px;align-items:center}
+form label{display:block;margin:12px 0 4px;font-weight:600;font-size:.9rem}form .row{display:flex;gap:8px;align-items:center;font-weight:400;margin:6px 0}
+input[type=text],input[type=password],input[type=number],textarea{width:100%;font:inherit;background:var(--card);color:var(--ink);border:1px solid var(--line);padding:.6em;border-radius:2px}
+fieldset{border:1px solid var(--line);padding:8px 12px;margin-top:12px}.msg{color:var(--accent);margin-top:8px;min-height:1.5em}.badge{font-size:.75rem;color:var(--mute)}
+</style></head><body>
+<div class="top"><div class="wrap"><span class="logo">OFF<i>side</i> admin</span></div></div>
+<main class="wrap" id="app" style="padding-top:28px;padding-bottom:60px"></main>
+<script>
+const B = location.pathname.replace(/\/$/, '');
+const $ = s => document.querySelector(s), app = $('#app');
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+async function api(m, u, b) {
+  const fd = b instanceof FormData;
+  const r = await fetch(B + '/api' + u, { method: m, headers: { 'X-Requested-With': 'fetch', ...(b && !fd ? { 'Content-Type': 'application/json' } : {}) }, body: b ? (fd ? b : JSON.stringify(b)) : undefined });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw Object.assign(new Error(j.error || 'Something went wrong'), { status: r.status });
+  return j;
+}
+const F = {
+  fabrics: [['name', 'Name'], ['summary', 'Short summary'], ['details', 'Details (only verified facts)', 'area'], ['image', 'Texture photo', 'img'], ['sort', 'Order (lower first)', 'num'], ['published', 'Published', 'chk']],
+  works: [['title', 'Title'], ['caption', 'Caption'], ['image', 'Photo', 'img'], ['pos', 'Rank (lower = stronger placement)', 'num'], ['fabric_ids', 'Fabrics used', 'fab'], ['published', 'Published', 'chk']]
+};
+let tab = 'fabrics', D = { fabrics: [], works: [] }, edit = null;
+
+function loginView(err) {
+  app.innerHTML = `<h2>Sign in</h2><form id="lg" style="max-width:360px"><label>Password<input type="password" id="pw" autocomplete="current-password" autofocus></label><br><button class="btn" type="submit">Sign in</button><div class="msg">${esc(err || '')}</div></form>`;
+  $('#lg').onsubmit = async e => {
+    e.preventDefault();
+    const r = await fetch(B + '/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: $('#pw').value }) });
+    const j = await r.json().catch(() => ({}));
+    r.ok ? load() : loginView(j.error);
+  };
+}
+function field([k, l, t], v) {
+  const val = v[k] ?? '';
+  if (t === 'area') return `<label>${l}<textarea name="${k}" rows="6">${esc(val)}</textarea></label>`;
+  if (t === 'chk') return `<label class="row"><input type="checkbox" name="${k}" ${(v[k] ?? 1) ? 'checked' : ''}> ${l}</label>`;
+  if (t === 'num') return `<label>${l}<input type="number" name="${k}" value="${esc(val === '' ? 100 : val)}"></label>`;
+  if (t === 'img') return `<label>${l}</label><input type="hidden" name="${k}" value="${esc(val)}"><div id="pv">${val ? `<img src="${esc(val)}" alt="" style="width:120px;height:120px;object-fit:cover">` : ''}</div><input type="file" id="file" accept="image/jpeg,image/png,image/webp">`;
+  if (t === 'fab') return `<fieldset><legend>${l}</legend>${D.fabrics.map(x => `<label class="row"><input type="checkbox" data-fab="${x.id}" ${(v.fabric_ids || []).includes(x.id) ? 'checked' : ''}> ${esc(x.name)}</label>`).join('') || '<p>Add fabrics first.</p>'}</fieldset>`;
+  return `<label>${l}<input type="text" name="${k}" value="${esc(val)}"></label>`;
+}
+function draw(msg) {
+  const rows = D[tab], nm = x => x.name || x.title;
+  app.innerHTML = `<div class="bar"><div class="tabs"><button class="btn ${tab === 'fabrics' ? '' : 'ghost'}" data-tab="fabrics">Fabrics</button><button class="btn ${tab === 'works' ? '' : 'ghost'}" data-tab="works">Works</button></div>
+  <div><a class="btn ghost" href="/" target="_blank">View site</a> <button class="btn ghost" data-act="logout">Sign out</button></div></div>
+  ${edit === null ? `<button class="btn" data-act="new">Add ${tab === 'fabrics' ? 'fabric' : 'work'}</button><div class="msg">${esc(msg || '')}</div>
+  ${rows.map(x => `<div class="item"><div class="l">${x.image ? `<img src="${esc(x.image)}" alt="">` : '<div class="ph" style="width:48px;height:48px"></div>'}<div><b>${esc(nm(x))}</b><div class="badge">${x.published ? 'Published' : 'Hidden'}</div></div></div><div><button class="btn ghost" data-act="edit" data-id="${x.id}">Edit</button> <button class="btn ghost" data-act="del" data-id="${x.id}">Delete</button></div></div>`).join('') || '<p>Nothing here yet.</p>'}`
+  : `<h2>${edit === 'new' ? 'Add' : 'Edit'} ${tab === 'fabrics' ? 'fabric' : 'work'}</h2><form id="f" style="max-width:560px">${F[tab].map(f => field(f, edit === 'new' ? {} : rows.find(x => x.id === edit))).join('')}<br>
+  <button class="btn" type="submit">Save</button> <button class="btn ghost" type="button" data-act="cancel">Cancel</button><div class="msg" id="fm"></div></form>`}`;
+  const f = $('#f');
+  if (f) {
+    f.onsubmit = async e => {
+      e.preventDefault();
+      const b = {};
+      for (const [k, , t] of F[tab]) {
+        if (t === 'chk') b[k] = f.elements[k].checked;
+        else if (t === 'fab') b[k] = [...f.querySelectorAll('[data-fab]:checked')].map(x => +x.dataset.fab);
+        else b[k] = f.elements[k].value;
+      }
+      try { edit === 'new' ? await api('POST', '/' + tab, b) : await api('PUT', '/' + tab + '/' + edit, b); edit = null; await load('Saved.'); }
+      catch (er) { $('#fm').textContent = er.message; }
+    };
+    const file = $('#file');
+    if (file) file.onchange = async () => {
+      const fd = new FormData(); fd.append('file', file.files[0]);
+      try { const j = await api('POST', '/upload', fd); f.elements.image.value = j.url; $('#pv').innerHTML = `<img src="${j.url}" alt="" style="width:120px;height:120px;object-fit:cover">`; }
+      catch (er) { $('#fm').textContent = er.message; }
+    };
+  }
+}
+document.addEventListener('click', async e => {
+  const t = e.target.closest('[data-tab],[data-act]'); if (!t) return;
+  if (t.dataset.tab) { tab = t.dataset.tab; edit = null; return draw(); }
+  const a = t.dataset.act, id = +t.dataset.id;
+  if (a === 'new') { edit = 'new'; draw(); }
+  else if (a === 'edit') { edit = id; draw(); }
+  else if (a === 'cancel') { edit = null; draw(); }
+  else if (a === 'del' && confirm('Delete this item? This cannot be undone.')) { await api('DELETE', '/' + tab + '/' + id); load('Deleted.'); }
+  else if (a === 'logout') { await api('POST', '/logout', {}); loginView(); }
+});
+async function load(msg) {
+  try { D.fabrics = await api('GET', '/fabrics'); D.works = await api('GET', '/works'); draw(msg); }
+  catch (er) { er.status === 401 ? loginView() : app.textContent = er.message; }
+}
+load();
+</script></body></html>

@@ -1,0 +1,1 @@
+R['process'] = () => page('Process', 'A conversation, not a form.', `<ol class="steps">${STEPS.map(s => `<li><span>${s}</span></li>`).join('')}</ol><br>${cta('Hi OFFside, I’d like to start an order.')}`);
